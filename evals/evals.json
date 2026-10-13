@@ -1,0 +1,41 @@
+{
+  "skill_name": "skill-checkup",
+  "note": "测试题。第 1 题用 Anthropic 公开的 pdf Skill，任何人都能复现；第 2 题请换成自己电脑上的某个 Skill。被检查的 Skill 更新后，第 1 题的预期结果可能需要调整。",
+  "evals": [
+    {
+      "id": 1,
+      "name": "public-skill-from-github",
+      "should_trigger": true,
+      "prompt": "帮我看看这个 skill 好不好用：https://github.com/anthropics/skills/tree/main/skills/pdf",
+      "expected_output": "先把仓库下载到临时文件夹再检查。按结论格式交付，指出：forms.md 第 4 行的 `python scripts/check_fillable_fields` 漏写了 .py；scripts/create_validation_image.py 没有任何地方引用；reference.md 和 forms.md 超过 100 行，开头没有目录。每条问题有文件、行号和原文，且与原文一致。LICENSE.txt 中的网址不列为安全风险。"
+    },
+    {
+      "id": 2,
+      "name": "local-skill",
+      "should_trigger": true,
+      "prompt": "这个 skill 还能用吗？<换成你电脑上某个 Skill 的文件夹路径>",
+      "expected_output": "运行扫描脚本，给出三句话说明、按影响排序的问题（最多七条）、使用情况和重复版本；没有可查对话记录的工具，写明没有记录。"
+    },
+    {
+      "id": 3,
+      "name": "improve-request",
+      "should_trigger": true,
+      "prompt": "这个 skill 老是不按步骤走，帮我看看怎么改：<Skill 文件夹路径>",
+      "expected_output": "先体检，再按优化步骤给出修改顺序；修改前列出要改的地方，等用户同意。"
+    },
+    {
+      "id": 4,
+      "name": "create-new-skill",
+      "should_trigger": false,
+      "prompt": "帮我新写一个整理证据目录的 skill",
+      "expected_output": "不调用 skill-checkup，交给专门新建 Skill 的工具或直接新建。"
+    },
+    {
+      "id": 5,
+      "name": "review-contract-not-skill",
+      "should_trigger": false,
+      "prompt": "帮我检查一下这份合同有没有问题",
+      "expected_output": "不调用 skill-checkup。检查对象是合同，不是 Skill。"
+    }
+  ]
+}
