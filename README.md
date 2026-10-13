@@ -38,8 +38,8 @@ Skill 越装越多，用起来顺手的却不多。skill-checkup 读一遍 Skill
 > **不足**：描述没有写明什么情况下不该用它，检查清单只覆盖买卖合同。
 >
 > **需要改的地方**
-> 1. 描述没有写明什么情况下不该用它。遇到需要直接修改 Word 文件的任务时，Agent 也可能调用它（SKILL.md 第 3 行）。
->    改法：在描述末尾加一句"需要直接修改 Word 文件时，改用专门做修订的 Skill"。
+> 1. SKILL.md 的描述没有写明什么情况下不该使用这个 Skill。遇到需要直接修改 Word 文件的任务时，Agent 也可能调用这个 Skill（SKILL.md 第 3 行）。
+>    改法：建议作者在描述末尾加一句"需要直接修改 Word 文件时，改用专门做修订的 Skill"。
 
 **优势**
 
@@ -118,7 +118,7 @@ skill-checkup/
 
 ### 版本与更新
 
-当前版本 0.1.1（2026-10-13）。更新会发布在本仓库，使用前可以先看一眼有没有新版本；更新时用新文件夹整个替换旧的即可。
+当前版本 0.1.2（2026-10-13）。更新会发布在本仓库，使用前可以先看一眼有没有新版本；更新时用新文件夹整个替换旧的即可。
 
 ### 许可
 
@@ -241,7 +241,7 @@ The checklist combines Anthropic's "Skill authoring best practices" and the revi
 
 ### Version and updates
 
-Current version: 0.1.1 (2026-10-13). Updates are published in this repository, so it is worth checking for a newer version before use. To update, replace the old folder with the new one.
+Current version: 0.1.2 (2026-10-13). Updates are published in this repository, so it is worth checking for a newer version before use. To update, replace the old folder with the new one.
 
 ### License
 
