@@ -6,6 +6,7 @@
 """
 import argparse
 import hashlib
+import json
 import re
 import sys
 from datetime import datetime
@@ -55,7 +56,7 @@ SECURITY = {
 
 def read_text(p):
     try:
-        return p.read_text(encoding="utf-8")
+        return p.read_text(encoding="utf-8-sig")
     except (UnicodeDecodeError, OSError):
         try:
             return p.read_text(encoding="gbk")
@@ -396,13 +397,45 @@ def copies_and_neighbors(folder, info, project, out):
         out.append("- 无")
 
 
+def call_texts(obj, agent):
+    """从一条对话记录里取出"调用"的部分：工具名和输入参数。工具的输出、系统说明一律不取。"""
+    texts = []
+    if agent == "Claude Code":
+        msg = obj.get("message") or {}
+        content = msg.get("content")
+        if msg.get("role") == "assistant" and isinstance(content, list):
+            for c in content:
+                if isinstance(c, dict) and c.get("type") == "tool_use":
+                    inp = c.get("input") or {}
+                    if c.get("name") == "Read":
+                        texts.append(("read", str(inp.get("file_path", ""))))
+                    elif c.get("name") == "Skill":
+                        texts.append(("skill", str(inp.get("skill", ""))))
+                    else:
+                        texts.append(("cmd", json.dumps(inp, ensure_ascii=False)))
+        elif msg.get("role") == "user" and isinstance(content, str) and "<command-name>" in content:
+            texts.append(("slash", content))
+    else:
+        pl = obj.get("payload") or {}
+        t = pl.get("type")
+        if t == "function_call":
+            texts.append(("cmd", str(pl.get("arguments", ""))))
+        elif t == "local_shell_call":
+            texts.append(("cmd", json.dumps(pl.get("action", {}), ensure_ascii=False)))
+        elif t == "custom_tool_call":
+            texts.append(("cmd", str(pl.get("input", ""))))
+        item = pl.get("item")
+        if isinstance(item, dict) and item.get("type") == "CommandExecution":
+            texts.append(("cmd", json.dumps(item.get("command", ""), ensure_ascii=False)))
+    return texts
+
+
 def usage(name, out):
-    nb = re.escape(name.encode("utf-8"))
-    path_any = re.compile(rb"skills(?:/|\\+)([\w.\-]+)(?:/|\\+)SKILL\.md")
-    claude_extra = re.compile(rb'"skill":"(?:[^"]*:)?' + nb + rb'"|<command-name>/?(?:[^<]*:)?' + nb + rb"</command-name>")
-    ts = re.compile(rb'"timestamp":"(\d{4}-\d{2}-\d{2})')
+    nl = name.lower()
+    path_any = re.compile(r"skills(?:/|\\+)([\w.\-]+)(?:/|\\+)SKILL\.md", re.I)
     # 路径前面紧挨着读文件命令，才算读取；只是打印、搜索、比较路径的不算
-    read_before = re.compile(rb'(?:\b(?:cat|Get-Content|gc|head|tail|less|more|type|bat)\s|\bsed\s+-n|open\()[^\n]{0,160}$', re.I)
+    read_before = re.compile(r"(?:\b(?:cat|Get-Content|gc|head|tail|less|more|type|bat)\s|\bsed\s+-n|open\()[^\n]{0,160}$", re.I)
+    slash = re.compile(r"<command-name>/?(?:[^<]*:)?" + re.escape(name) + r"</command-name>", re.I)
     out.append("\n## 使用记录（检测到读取或调用这个 Skill 的对话数，可能包含检查和维护本身）")
     for agent, root in LOG_ROOTS.items():
         if not root.exists():
@@ -417,42 +450,29 @@ def usage(name, out):
             if name.encode("utf-8") not in data:
                 continue
             key = f.parent.parent.name if f.parent.name == "subagents" else f.stem
-            hit_dates, all_skills = [], set()
-
-            def tool_line(start):
-                end = data.find(b"\n", start)
-                line = data[data.rfind(b"\n", 0, start) + 1: end if end != -1 else len(data)]
-                if agent == "Claude Code":
-                    ok = b'"tool_use"' in line or b"<command-name>" in line
-                else:
-                    ok = (b'"session_meta"' not in line and b'"turn_context"' not in line
-                          and b'"role":"developer"' not in line and b'"role":"system"' not in line
-                          and (b"function_call" in line or b"CommandExecution" in line
-                               or b"local_shell_call" in line or b"custom_tool_call" in line
-                               or b"exec_command" in line))
-                return ok, line
-            for m in path_any.finditer(data):
-                ok, line = tool_line(m.start())
-                if ok:
-                    line_start = data.rfind(b"\n", 0, m.start()) + 1
-                    before = data[max(line_start, m.start() - 200):m.start()]
-                    claude_read = agent == "Claude Code" and b'"name":"Read"' in line
-                    if not (claude_read or read_before.search(before)):
-                        continue
-                    all_skills.add(m.group(1).lower())
-                    if m.group(1).lower() == name.lower().encode("utf-8"):
-                        d = ts.search(line)
-                        hit_dates.append(d.group(1).decode() if d else "")
-            if agent == "Claude Code":
-                for m in claude_extra.finditer(data):
-                    ok, line = tool_line(m.start())
-                    if ok:
-                        d = ts.search(line)
-                        hit_dates.append(d.group(1).decode() if d else "")
-            if hit_dates:
-                s = sessions.setdefault(key, {"dates": [], "skills": set()})
-                s["dates"] += [d for d in hit_dates if d]
-                s["skills"] |= all_skills
+            dates, skills_seen = [], set()
+            for raw in data.split(b"\n"):
+                if b"SKILL.md" not in raw and b"<command-name>" not in raw and b'"Skill"' not in raw:
+                    continue
+                try:
+                    obj = json.loads(raw)
+                except ValueError:
+                    continue
+                hit = False
+                for kind, text in call_texts(obj, agent):
+                    if kind == "skill":
+                        hit = hit or text.split(":")[-1].lower() == nl
+                    elif kind == "slash":
+                        hit = hit or bool(slash.search(text))
+                    else:
+                        for m in path_any.finditer(text):
+                            skills_seen.add(m.group(1).lower())
+                            if m.group(1).lower() == nl and (kind == "read" or read_before.search(text[max(0, m.start() - 200):m.start()])):
+                                hit = True
+                if hit:
+                    dates.append(str(obj.get("timestamp", ""))[:10])
+            if dates:
+                sessions[key] = {"dates": [d for d in dates if d], "skills": skills_seen}
         used = {k: v for k, v in sessions.items() if len(v["skills"]) < MAINT_THRESHOLD}
         maint = len(sessions) - len(used)
         dates = sorted(d for v in used.values() for d in v["dates"])
@@ -460,10 +480,10 @@ def usage(name, out):
         if dates:
             line += f"，最早 {dates[0]}，最近 {dates[-1]}"
         if maint:
-            line += f"；另有 {maint} 次对话属于批量读取多个 Skill（维护或检查），未计入"
+            line += f"；另有 {maint} 段对话一次读取了多个 Skill，多半是维护或检查，未计入"
         out.append(line)
     out.append("- WorkBuddy 等其他工具：没有可查的记录")
-    out.append("- 注：只统计明确的调用和读文件操作；这只能说明 Skill 被读取或调用过，不能说明它完成了任务，本次检查也可能被计入")
+    out.append("- 注：只统计工具调用中明确的调用和读文件操作，不看工具输出；这只能说明 Skill 被读取或调用过，不能说明它完成了任务，本次检查也可能被计入")
 
 
 def main():

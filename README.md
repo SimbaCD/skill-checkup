@@ -118,7 +118,7 @@ skill-checkup/
 
 ### 版本与更新
 
-当前版本 0.1.3（2026-10-13）。更新会发布在本仓库，使用前可以先看一眼有没有新版本；更新时用新文件夹整个替换旧的即可。
+当前版本 0.1.4（2026-10-13）。更新会发布在本仓库，使用前可以先看一眼有没有新版本；更新时用新文件夹整个替换旧的即可。
 
 ### 许可
 
@@ -241,7 +241,7 @@ The checklist combines Anthropic's "Skill authoring best practices" and the revi
 
 ### Version and updates
 
-Current version: 0.1.3 (2026-10-13). Updates are published in this repository, so it is worth checking for a newer version before use. To update, replace the old folder with the new one.
+Current version: 0.1.4 (2026-10-13). Updates are published in this repository, so it is worth checking for a newer version before use. To update, replace the old folder with the new one.
 
 ### License
 
