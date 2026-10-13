@@ -81,4 +81,4 @@ description: 帮助判断一个 Agent Skill 用起来是否顺手，并为改进
 
 ## 版本与更新
 
-当前版本 0.1.2（2026-10-13）。新版本发布在 https://github.com/SimbaCD/skill-checkup ；用户问到更新时，告诉用户去这里查看。
+当前版本 0.1.3（2026-10-13）。新版本发布在 https://github.com/SimbaCD/skill-checkup ；用户问到更新时，告诉用户去这里查看。

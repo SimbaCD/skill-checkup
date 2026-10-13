@@ -27,7 +27,7 @@ TEXT_EXT = {".md", ".txt", ".py", ".ps1", ".sh", ".js", ".mjs", ".ts", ".json",
 SKIP_ORPHAN = re.compile(r"^(readme|license|changelog|contributing|notice)", re.I)
 NEGATION = re.compile(r"不得|禁止|不要|严禁|切勿|不能|不可|不准|\bdo not\b|\bdon't\b|\bnever\b|\bmust not\b", re.I)
 ROLE_LINE = re.compile(r"^\s*(你是一[个位名]|you are (an?|the) )", re.I)
-POINTER = re.compile(r"(?:\.{1,2}/)*(?:[\w.-]+/)*[\w.\-\u4e00-\u9fff（）()]+\.(?:md|py|ps1|sh|js|mjs|json|ya?ml|txt|html|csv|svg|docx|xlsx)", re.I)
+POINTER = re.compile(r"(?:\.{1,2}/)*(?:[\w.-]+/)*[\w.\-\u4e00-\u9fff（）()]+\.(?:md|py|ps1|sh|json|mjs|js|ya?ml|txt|html|csv|svg|docx|xlsx)\b", re.I)
 BARE_PATH = re.compile(r"\b(?:scripts|references|reference|templates|assets)/[\w.\-]+")  # 不带扩展名的写法
 SHARED_SKIP = re.compile(r"^(license|licence|readme|changelog|contributing|notice)", re.I)  # 许可、说明文件相同属正常
 STOPWORDS = set("a an the and or of to for in on with when whenever if any all this that these it its is are be by as from do does want wants ask asks include includes mention mentions user users use used using skill skills".split())
@@ -175,44 +175,62 @@ def static_checks(folder, out):
     stems = {}
     for p, r in rel.items():
         stems.setdefault(r.rsplit(".", 1)[0].lower(), []).append(p)
+    wrong_path, quoted_missing = [], []
+
+    def reach(h, cur):
+        if h not in depth:
+            depth[h] = depth[cur] + 1
+            queue.append(h)
+
     while queue:
         cur = queue.pop(0)
         if cur.suffix.lower() not in TEXT_EXT:
             continue
         for ln, line in enumerate(read_text(cur).splitlines(), start=1):
-            for m in POINTER.finditer(QUOTED.sub("", line)):
-                ref = m.group(0).lstrip("./")
+            quoted_spans = [m.span() for m in QUOTED.finditer(line)]
+            where = f"{rel.get(cur, cur.name)}:{ln}"
+            for m in POINTER.finditer(line):
+                raw = m.group(0)
+                ref = raw.lstrip("./")
                 if any(c in ref for c in "<>{}*"):
                     continue
-                cand = (cur.parent / m.group(0)).resolve()
-                hits = [p for p in files if p.resolve() == cand] or by_name.get(ref.lower()) \
-                    or by_name.get(Path(ref).name.lower())
-                if hits:
-                    for h in hits:
-                        if h not in depth:
-                            depth[h] = depth[cur] + 1
-                            queue.append(h)
-                elif "/" in ref and ref.split("/")[0] in ("references", "scripts", "templates",
-                                                           "assets", "methods", "examples"):
-                    missing.append(f"{rel.get(cur, cur.name)}:{ln} → {ref}")
-            for m in BARE_PATH.finditer(QUOTED.sub("", line)):
+                in_quote = any(a <= m.start() < b for a, b in quoted_spans)
+                exact = [p for p in files if p.resolve() in ((cur.parent / raw).resolve(), (folder / ref).resolve())]
+                if exact:
+                    for h in exact:
+                        reach(h, cur)
+                    continue
+                same_name = by_name.get(Path(ref).name.lower(), [])
+                if "/" in ref and Path(ref).name.lower() in ("skill.md", "readme.md", "license", "license.md"):
+                    continue  # 这类通用文件名常用来指别的 Skill，不按本 Skill 的文件核对
+                if "/" not in ref and same_name:
+                    for h in same_name:
+                        reach(h, cur)
+                elif same_name:
+                    wrong_path.append(f"{where} 写的是 {ref}，实际文件在 {rel[same_name[0]]}")
+                    for h in same_name:
+                        reach(h, cur)
+                elif in_quote:
+                    quoted_missing.append(f"{where} → {ref}")
+                elif "/" in ref:
+                    missing.append(f"{where} → {ref}")
+            for m in BARE_PATH.finditer(line):
                 ref = m.group(0)
                 if "." in ref.rsplit("/", 1)[-1] or ref.lower() in by_name:
                     continue
                 hits = stems.get(ref.lower())
                 if hits:
-                    no_ext.append(f"{rel.get(cur, cur.name)}:{ln} → {ref}（实际文件 {rel[hits[0]]}）")
+                    no_ext.append(f"{where} → {ref}（实际文件 {rel[hits[0]]}）")
                     for h in hits:
-                        if h not in depth:
-                            depth[h] = depth[cur] + 1
-                            queue.append(h)
+                        reach(h, cur)
     orphans = [rel[p] for p in files if p not in depth and not SKIP_ORPHAN.match(p.name)
                and p.suffix.lower() in TEXT_EXT and p.parts[-2] not in ("evals", "tests", "agents")
                and len(p.relative_to(folder).parts) > 1]
-    nested = [f"{rel[p]}（第 {d} 层）" for p, d in depth.items() if d >= 2 and p.suffix.lower() == ".md"]
+    nested = [f"{rel[p]}（第 {d} 层）" for p, d in depth.items()
+              if d >= 2 and p.suffix.lower() == ".md" and not SKIP_ORPHAN.match(p.name)]
     no_toc = []
     for p in depth:
-        if p is md or p.suffix.lower() != ".md":
+        if p is md or p.suffix.lower() != ".md" or SKIP_ORPHAN.match(p.name):
             continue
         t = read_text(p).splitlines()
         if len(t) > TOC_MIN and not re.search(r"目录|contents", "\n".join(t[:15]), re.I):
@@ -220,6 +238,10 @@ def static_checks(folder, out):
     out.append("\n## 文件与指向")
     out.append(f"- 共 {len(files)} 个文件")
     out.append("- 指向不存在的文件：" + ("；".join(missing[:10]) if missing else "无"))
+    if wrong_path:
+        out.append("- 路径写错（同名文件在别处）：" + "；".join(wrong_path[:10]))
+    if quoted_missing:
+        out.append("- 引号中提到、但不存在的文件（可能是举例，需判断）：" + "；".join(quoted_missing[:10]))
     out.append("- 未被指到的文件：" + ("、".join(sorted(orphans)[:15]) if orphans else "无"))
     if no_ext:
         out.append("- 引用漏写扩展名（照写运行会找不到文件）：" + "；".join(no_ext[:10]))
@@ -256,8 +278,14 @@ def static_checks(folder, out):
             for k, rx in SECURITY.items():
                 m = rx.search(line)
                 if m:
-                    hits[k].append(f"{rel[p]}:{ln}（{m.group(0)[:40]}）")
-    out.append("\n## 安全线索（只列位置，是否合理需结合用途判断）")
+                    if k == "疑似硬编码密钥":
+                        hits[k].append(f"{rel[p]}:{ln}")
+                    elif k == "外部网址":
+                        domain = re.sub(r"^https?://", "", m.group(0)).split("/")[0]
+                        hits[k].append(f"{rel[p]}:{ln}（{domain}）")
+                    else:
+                        hits[k].append(f"{rel[p]}:{ln}（{m.group(0)[:20]}）")
+    out.append("\n## 安全线索（只列位置和类型，不显示密钥等具体内容；是否合理需结合用途判断）")
     found = False
     for k, v in hits.items():
         if v:
@@ -373,6 +401,8 @@ def usage(name, out):
     path_any = re.compile(rb"skills(?:/|\\+)([\w.\-]+)(?:/|\\+)SKILL\.md")
     claude_extra = re.compile(rb'"skill":"(?:[^"]*:)?' + nb + rb'"|<command-name>/?(?:[^<]*:)?' + nb + rb"</command-name>")
     ts = re.compile(rb'"timestamp":"(\d{4}-\d{2}-\d{2})')
+    # 路径前面紧挨着读文件命令，才算读取；只是打印、搜索、比较路径的不算
+    read_before = re.compile(rb'(?:\b(?:cat|Get-Content|gc|head|tail|less|more|type|bat)\s|\bsed\s+-n|open\()[^\n]{0,160}$', re.I)
     out.append("\n## 使用记录（检测到读取或调用这个 Skill 的对话数，可能包含检查和维护本身）")
     for agent, root in LOG_ROOTS.items():
         if not root.exists():
@@ -404,6 +434,11 @@ def usage(name, out):
             for m in path_any.finditer(data):
                 ok, line = tool_line(m.start())
                 if ok:
+                    line_start = data.rfind(b"\n", 0, m.start()) + 1
+                    before = data[max(line_start, m.start() - 200):m.start()]
+                    claude_read = agent == "Claude Code" and b'"name":"Read"' in line
+                    if not (claude_read or read_before.search(before)):
+                        continue
                     all_skills.add(m.group(1).lower())
                     if m.group(1).lower() == name.lower().encode("utf-8"):
                         d = ts.search(line)
@@ -428,7 +463,7 @@ def usage(name, out):
             line += f"；另有 {maint} 次对话属于批量读取多个 Skill（维护或检查），未计入"
         out.append(line)
     out.append("- WorkBuddy 等其他工具：没有可查的记录")
-    out.append("- 注：只能说明这个 Skill 被读取或调用过，不能说明它真正完成了任务；本次检查也可能被计入")
+    out.append("- 注：只统计明确的调用和读文件操作；这只能说明 Skill 被读取或调用过，不能说明它完成了任务，本次检查也可能被计入")
 
 
 def main():
