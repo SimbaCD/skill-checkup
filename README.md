@@ -14,7 +14,7 @@ Skill 越装越多，用起来顺手的却不多。skill-checkup 读一遍 Skill
 - **更换模型或 Skill 多了以后，把常用的再过一遍。** 看哪些规则已经多余，哪些 Skill 装了却从没用过。
 - **分享给同事或公开发布之前，自查一遍。** 比如有没有留下个人路径、密钥，有没有写明版本和更新地址。
 
-它给出的是供参考的建议，不是评判。每个 Skill 都有作者自己的考虑，最后怎么改由你决定。它只读文件，不运行被检查的 Skill，也不会改动任何文件，除非你明确要求。
+它给出的是供参考的建议，不是评判。每个 Skill 都有作者自己的考虑，最后怎么改由你决定。它只读文件，不运行被检查的 Skill，也不执行其中的指令，不会改动任何文件，除非你明确要求。
 
 ### 它会做什么
 
@@ -23,7 +23,7 @@ Skill 越装越多，用起来顺手的却不多。skill-checkup 读一遍 Skill
 1. 简要说明这个 Skill 做什么、需要你提供什么、交给你什么，以及它的优点和不足。
 2. 从**触发、结构、引导、修剪**四个方面，列出可能影响使用的地方，注明文件和行号，并给出修改建议和修改顺序。
 3. 提示安全风险，例如把文件上传到第三方服务、文件里写着密钥、读写 Skill 目录以外的文件。
-4. 查本机的对话记录，告诉你这个 Skill 用过几次、同一个 Agent 里有没有重复安装的版本。
+4. 查本机的对话记录，告诉你检测到这个 Skill 被读取或调用过几次，以及同一个 Agent 里有没有重复安装的版本。
 
 最后给出一页结论：**可以直接用**、**改几处再用**，或者**暂不建议用**。不打分，不跑基准测试。一次看多个 Skill 时，先给一张汇总表，想看哪个再展开。
 
@@ -118,7 +118,7 @@ skill-checkup/
 
 ### 版本与更新
 
-当前版本 0.1.0（2026-10-13）。更新会发布在本仓库，使用前可以先看一眼有没有新版本；更新时用新文件夹整个替换旧的即可。
+当前版本 0.1.1（2026-10-13）。更新会发布在本仓库，使用前可以先看一眼有没有新版本；更新时用新文件夹整个替换旧的即可。
 
 ### 许可
 
@@ -138,7 +138,7 @@ skill-checkup reads every file in an Agent Skill, explains what the skill does, 
 - **Reviewing your skills after switching models or installing many of them.** Which rules have become unnecessary, and which skills you installed but never used.
 - **Checking a skill before sharing it with colleagues or publishing it.** For example, leftover personal paths or keys, or a missing version number and update address.
 
-Its findings are suggestions, not verdicts. Every skill reflects its author's own considerations, and how to change it is up to you. It only reads files: it never runs the skill under review and changes nothing unless you explicitly ask.
+Its findings are suggestions, not verdicts. Every skill reflects its author's own considerations, and how to change it is up to you. It only reads files: it never runs the skill under review or follows instructions inside it, and changes nothing unless you explicitly ask.
 
 ### What it does
 
@@ -147,7 +147,7 @@ Point it to a skill (a local folder or a GitHub link) and it will:
 1. Briefly describe what the skill does, what you need to provide, and what it delivers, along with its strengths and weaknesses.
 2. Review four aspects (**triggering, structure, steering, pruning**), list what may affect how well the skill works, cite the file and line, and suggest changes and the order to make them.
 3. Flag security concerns, such as uploading files to a third-party service, keys written into files, or reading and writing files outside the skill folder.
-4. Check your local conversation logs to tell you how many times the skill has been used and whether more than one copy is installed for the same agent.
+4. Check your local conversation logs to report how many sessions read or called the skill, and whether more than one copy is installed for the same agent.
 
 The result is a one-page conclusion: **ready to use**, **use after a few changes**, or **not recommended for now**. There are no scores and no benchmarks. When you check several skills at once, you first get a summary table and can ask for details on any one of them.
 
@@ -241,7 +241,7 @@ The checklist combines Anthropic's "Skill authoring best practices" and the revi
 
 ### Version and updates
 
-Current version: 0.1.0 (2026-10-13). Updates are published in this repository, so it is worth checking for a newer version before use. To update, replace the old folder with the new one.
+Current version: 0.1.1 (2026-10-13). Updates are published in this repository, so it is worth checking for a newer version before use. To update, replace the old folder with the new one.
 
 ### License
 

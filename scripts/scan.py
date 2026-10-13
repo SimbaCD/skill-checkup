@@ -93,6 +93,14 @@ def frontmatter(text):
     return fields, 0
 
 
+def folder_sig(folder):
+    """整个 Skill 文件夹的指纹：相对路径和内容。跳过缓存和 Agent 自己生成的文件。"""
+    skip = {"_user_meta.json", "workbuddy.json"}
+    items = sorted((p.relative_to(folder).as_posix(), file_hash(p)) for p in skill_files(folder)
+                   if p.name not in skip and p.suffix != ".pyc")
+    return hashlib.md5(repr(items).encode("utf-8")).hexdigest()
+
+
 def file_hash(p):
     try:
         return hashlib.md5(p.read_bytes()).hexdigest()
@@ -271,7 +279,7 @@ def agent_dirs(project):
 
 def copies_and_neighbors(folder, info, project, out):
     name = folder.name
-    target_md_hash = file_hash(info["md"])
+    target_sig = folder_sig(folder)
     out.append("\n## 本机安装的版本")
     any_copy = False
     for agent, ds in agent_dirs(project).items():
@@ -281,7 +289,7 @@ def copies_and_neighbors(folder, info, project, out):
             md = find_skill_md(c) if c.is_dir() else None
             if md:
                 mt = datetime.fromtimestamp(max(p.stat().st_mtime for p in skill_files(c))).strftime("%Y-%m-%d")
-                same = "与被检查的版本相同" if file_hash(md) == target_md_hash else "SKILL.md 内容不同"
+                same = "全部文件与被检查的版本相同" if folder_sig(c) == target_sig else "文件内容与被检查的版本不同"
                 found.append(f"{c}（{mt}，{same}）")
         if found:
             any_copy = True
@@ -365,7 +373,7 @@ def usage(name, out):
     path_any = re.compile(rb"skills(?:/|\\+)([\w.\-]+)(?:/|\\+)SKILL\.md")
     claude_extra = re.compile(rb'"skill":"(?:[^"]*:)?' + nb + rb'"|<command-name>/?(?:[^<]*:)?' + nb + rb"</command-name>")
     ts = re.compile(rb'"timestamp":"(\d{4}-\d{2}-\d{2})')
-    out.append("\n## 使用记录")
+    out.append("\n## 使用记录（检测到读取或调用这个 Skill 的对话数，可能包含检查和维护本身）")
     for agent, root in LOG_ROOTS.items():
         if not root.exists():
             out.append(f"- {agent}：没有找到对话记录（{root}）")
@@ -413,14 +421,14 @@ def usage(name, out):
         used = {k: v for k, v in sessions.items() if len(v["skills"]) < MAINT_THRESHOLD}
         maint = len(sessions) - len(used)
         dates = sorted(d for v in used.values() for d in v["dates"])
-        line = f"- {agent}：{len(used)} 次对话中使用"
+        line = f"- {agent}：{len(used)} 段对话"
         if dates:
             line += f"，最早 {dates[0]}，最近 {dates[-1]}"
         if maint:
             line += f"；另有 {maint} 次对话属于批量读取多个 Skill（维护或检查），未计入"
         out.append(line)
     out.append("- WorkBuddy 等其他工具：没有可查的记录")
-    out.append("- 注：本次体检读取这个 Skill，也可能被记为一次使用")
+    out.append("- 注：只能说明这个 Skill 被读取或调用过，不能说明它真正完成了任务；本次检查也可能被计入")
 
 
 def main():
